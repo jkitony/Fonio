@@ -1,0 +1,205 @@
+#Run haystack
+#global
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define the file path
+file_path = 'fonio_haystack.txt'
+
+# Load the file into a DataFrame
+df = pd.read_csv(file_path, sep='\t')
+
+# Separate the data into "HomoA" and "HomoB" based on the column structure in the original file
+homo_a_genes = df.iloc[:, 0].values  # HomoA gene names
+homo_b_genes = df.iloc[:, 13].values  # HomoB gene names
+
+# Extract the expression values for HomoA (T0 to T66) and HomoB (T0 to T66)
+homo_a_expression = df.iloc[:, 1:13].values  # Expression values for HomoA across time points
+homo_b_expression = df.iloc[:, 14:].values  # Expression values for HomoB across time points
+
+# Calculate the average expression for each gene across all time points
+homo_a_avg_expression = np.mean(homo_a_expression, axis=1)
+homo_b_avg_expression = np.mean(homo_b_expression, axis=1)
+
+# Log2-transform the averaged expression values for both HomoA and HomoB
+homo_a_log2 = np.log2(homo_a_avg_expression + 1)  # Adding 1 to avoid log(0)
+homo_b_log2 = np.log2(homo_b_avg_expression + 1)  # Adding 1 to avoid log(0)
+
+# Flip the HomoA values to show the trend in the opposite direction
+homo_a_log2_flipped = -homo_a_log2
+
+# Create subplots for HomoA and HomoB with shared y-axis
+fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+
+# Plot for HomoA (First subplot, flipped)
+hist_a, bins_a, _ = axes[0].hist(homo_a_log2_flipped, bins=20, color='royalblue', edgecolor='black', alpha=0.6)
+axes[0].set_title('Fonio homoeolog expression bias - A', fontsize=12, fontweight='bold')
+axes[0].set_xlabel('Log2-transformed Average Expression', fontsize=10, fontweight='bold')
+axes[0].set_ylabel('Gene Count (log2 expression bin)', fontsize=10, fontweight='bold')
+axes[0].grid(axis='y', alpha=0.75)
+
+# Plot the trend line for HomoA (Flipped)
+# Plot the trend line for HomoA (Flipped)
+bin_centers_a = 0.5 * (bins_a[1:] + bins_a[:-1])
+axes[0].plot(bin_centers_a, hist_a, color='black', marker='o', linestyle='-', lw=2, label='Trend')
+axes[0].legend(prop={'weight': 'bold'})  # Make "Trend" label bold for HomoA
+
+# Plot for HomoB (Second subplot)
+hist_b, bins_b, _ = axes[1].hist(homo_b_log2, bins=20, color='darkorange', edgecolor='black', alpha=0.6)
+axes[1].set_title('Fonio homoeolog expression bias - B', fontsize=12, fontweight='bold')
+axes[1].set_xlabel('Log2-transformed Average Expression', fontsize=10, fontweight='bold')
+axes[1].grid(axis='y', alpha=0.75)
+
+# Plot the trend line for HomoB
+bin_centers_b = 0.5 * (bins_b[1:] + bins_b[:-1])
+axes[1].plot(bin_centers_b, hist_b, color='black', marker='o', linestyle='-', lw=2, label='Trend')
+axes[1].legend(prop={'weight': 'bold'})  # Make "Trend" label bold for HomoB
+
+# Set bold font for axis ticks
+axes[0].tick_params(axis='both', labelsize=10, width=2, labelcolor='black')
+axes[1].tick_params(axis='both', labelsize=10, width=2, labelcolor='black')
+
+# Automatically adjust the x-axis labels for HomoA (flipped)
+max_label_a = int(np.ceil(np.max(bins_a)))
+min_label_a = int(np.floor(np.min(bins_a)))
+xticks_a = range(min_label_a, max_label_a + 1)
+
+# Automatically adjust the x-axis labels for HomoB
+max_label_b = int(np.ceil(np.max(bins_b)))
+min_label_b = int(np.floor(np.min(bins_b)))
+xticks_b = range(min_label_b, max_label_b + 1)
+
+# Set bold x-tick and y-tick labels for HomoA
+axes[0].set_xticks(xticks_a)
+axes[0].set_xticklabels([str(x) for x in xticks_a], fontweight='bold')
+axes[0].set_yticklabels([int(y) for y in axes[0].get_yticks()], fontweight='bold')
+
+# Set bold x-tick and y-tick labels for HomoB
+axes[1].set_xticks(xticks_b)
+axes[1].set_xticklabels([str(x) for x in xticks_b], fontweight='bold')
+axes[1].set_yticklabels([int(y) for y in axes[1].get_yticks()], fontweight='bold')
+
+# Adjust the layout to move the subplots closer
+plt.subplots_adjust(wspace=0.1)
+
+# Add a plot subtitle/caption explaining the axes
+plt.suptitle("", fontsize=10, fontweight='bold')
+
+# Adjust layout and save the figure
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+# Save the plot
+plt.savefig('global_homoeolog_expression_bias_with_explanation.png', dpi=300, bbox_inches='tight')
+
+# Show the plot
+plt.show()
+
+########################################################
+#Chromosome wise-average
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from collections import defaultdict
+
+# Define the file path
+file_path = 'fonio_haystack.txt'
+
+# Load the file into a DataFrame
+df = pd.read_csv(file_path, sep='\t')
+
+# The first two columns are HomoA and HomoB gene names
+homo_a_genes = df.iloc[:, 0].values  # Gene names in HomoA
+homo_b_genes = df.iloc[:, 13].values  # Gene names in HomoB
+
+# Expression values for HomoA (columns T0 to T66) and HomoB (columns T0 to T66)
+homo_a_expression = df.iloc[:, 1:13].values  # T0 to T66 for HomoA
+homo_b_expression = df.iloc[:, 14:].values  # T0 to T66 for HomoB
+
+# Initialize a dictionary to store results per chromosome (only for 1-9)
+chromosome_results = defaultdict(lambda: {'A': 0, 'B': 0, 'C': 0})
+
+# Function to extract chromosome number from the gene name (e.g., 'De1Ag00008' -> 1)
+def get_chromosome_number(gene_name):
+    try:
+        chromosome_number = int(gene_name[2])  # Extract the chromosome number (De1 -> 1)
+        return chromosome_number if 1 <= chromosome_number <= 9 else None
+    except (ValueError, IndexError):
+        return None
+
+# Compare HomoA and HomoB values across time points using HomoA as the baseline
+for i in range(len(homo_a_genes)):
+    # Calculate the average expression for HomoA and HomoB
+    avg_homo_a = np.mean(homo_a_expression[i])
+    avg_homo_b = np.mean(homo_b_expression[i])
+
+    # Get the chromosome number for HomoA gene (skip if not between 1-9)
+    chrom_a = get_chromosome_number(homo_a_genes[i])
+    if chrom_a is None:
+        continue  # Skip if chromosome is outside of 1-9 or unrecognized
+
+    # Compare the averages and assign A, B, or C
+    if abs(avg_homo_a - avg_homo_b) > 5 and avg_homo_a > avg_homo_b:
+        chromosome_results[chrom_a]['A'] += 1  # HomoA has higher average
+    elif avg_homo_b > avg_homo_a:
+        chromosome_results[chrom_a]['B'] += 1  # HomoB has higher average
+    else:
+        chromosome_results[chrom_a]['C'] += 1  # Expression is similar
+
+# Convert results into a DataFrame for plotting
+chromosome_counts = pd.DataFrame(chromosome_results).T
+chromosome_counts.index = [f'Chr {chr_num}' for chr_num in chromosome_counts.index]
+chromosome_counts = chromosome_counts.fillna(0).astype(int)
+
+# First plot: including all categories (HomoA, HomoB, Neutral)
+ax = chromosome_counts.plot(kind='bar', figsize=(10, 6), width=0.8)  # Adjusted width for tighter bars
+
+# Set bold labels and title
+plt.title('Fonio homoeolog expression bias (HEB)', fontsize=14, fontweight='bold')
+plt.xlabel('', fontsize=12, fontweight='bold')
+plt.ylabel('Gene count', fontsize=12, fontweight='bold')
+
+# Customize legend labels
+legend_labels = ['A', 'B', 'Neutral']
+ax.legend(legend_labels, title='', title_fontsize='12', fontsize='10', loc='upper center', bbox_to_anchor=(0.5, 1.00), ncol=3, frameon=False, prop={'weight': 'bold'})
+
+# Set ticks to bold
+ax.tick_params(axis='both', which='major', labelsize=10, labelcolor='black', width=2)
+ax.set_xticklabels(ax.get_xticklabels(), fontweight='bold')
+ax.set_yticklabels(ax.get_yticklabels(), fontweight='bold')
+
+# Save the plot
+plt.savefig('genome_dominance_bias_by_chromosome_bold_tight.png', dpi=300, bbox_inches='tight')
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+### Second Plot: Excluding "Neutral" (Only HomoA and HomoB)
+# Filter out the "C" (Neutral) column
+chromosome_counts_no_neutral = chromosome_counts.drop(columns=['C'])
+
+# Create a second plot excluding "Neutral"
+ax2 = chromosome_counts_no_neutral.plot(kind='bar', figsize=(10, 6), width=0.8, color=['royalblue', 'darkorange'])  # Adjusted width for tighter bars
+
+# Set bold labels and title
+plt.title('Fonio homoeolog expression bias (HEB)', fontsize=14, fontweight='bold')
+plt.xlabel('', fontsize=12, fontweight='bold')
+plt.ylabel('Gene count', fontsize=12, fontweight='bold')
+
+# Customize legend labels and make them bold
+legend_labels_no_neutral = ['A', 'B']
+ax2.legend(legend_labels_no_neutral, title='', title_fontsize='12', fontsize='10', loc='upper center', 
+           bbox_to_anchor=(0.5, 1.00), ncol=2, frameon=False, prop={'weight': 'bold'})  # Making labels bold
+
+# Set ticks to bold
+ax2.tick_params(axis='both', which='major', labelsize=10, labelcolor='black', width=2)
+ax2.set_xticklabels(ax2.get_xticklabels(), fontweight='bold')
+ax2.set_yticklabels(ax2.get_yticklabels(), fontweight='bold')
+
+# Save the second plot
+plt.savefig('genome_dominance_bias_no_neutral_bold_tight.png', dpi=300, bbox_inches='tight')
+
+# Show the second plot
+plt.tight_layout()
+plt.show()
